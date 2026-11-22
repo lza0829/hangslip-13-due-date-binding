@@ -39,6 +39,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  改约: (no, body) =>
+    req(`/挂牌/${encodeURIComponent(no)}/改约`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  改日流水: (no) =>
+    no
+      ? req(`/挂牌/${encodeURIComponent(no)}/改日流水`)
+      : req("/改日流水"),
+  超期扫描: () => req("/超期扫描"),
   隔离列表: () => req("/隔离"),
   日闸今日: () => req("/日闸/今日"),
   日闸列表: () => req("/日闸"),

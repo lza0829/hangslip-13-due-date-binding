@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.db import connect
+from app.services.due import count_overdue
 from app.services.gate import today_str
 
 router = APIRouter(tags=["总览"])
@@ -26,6 +27,8 @@ def dashboard():
             "今日": day,
             "日闸": "已结案" if gate and gate["sealed"] else "开放",
             "在途水位": wm["value"] if wm else 0,
+            # 超期徽章与超期扫描、隔离预检共用同一权威谓词，只认当前 due_date。
+            "超期待取": count_overdue(conn, day),
             "已收": cnt("已收"),
             "水洗": cnt("水洗"),
             "烘干": cnt("烘干"),

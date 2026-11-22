@@ -56,6 +56,15 @@ CREATE TABLE IF NOT EXISTS quarantines (
   created_at TEXT NOT NULL,
   resolved INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS due_date_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_no TEXT NOT NULL,
+  old_due_date TEXT NOT NULL,
+  new_due_date TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  operator TEXT NOT NULL,
+  changed_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS day_gates (
   day TEXT PRIMARY KEY,
   sealed INTEGER NOT NULL DEFAULT 0,

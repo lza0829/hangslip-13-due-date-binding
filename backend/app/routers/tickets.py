@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from app.services import tickets as svc
+from app.services import due as due_svc
 
 router = APIRouter(tags=["挂牌"])
 
@@ -42,6 +43,12 @@ class QuarantineIn(BaseModel):
     operator: str = "店员"
 
 
+class RescheduleIn(BaseModel):
+    new_due_date: str
+    reason: str = Field(min_length=1, description="改约原因必填")
+    operator: str = "店员"
+
+
 @router.get("/挂牌")
 def list_tickets(
     status: str | None = Query(None),
@@ -73,3 +80,32 @@ def pickup(ticket_no: str, body: PickupIn):
 @router.post("/挂牌/{ticket_no}/隔离")
 def quarantine(ticket_no: str, body: QuarantineIn):
     return svc.quarantine(ticket_no, body.kind, body.reason, body.operator)
+
+
+@router.post("/挂牌/{ticket_no}/改约")
+def reschedule(ticket_no: str, body: RescheduleIn):
+    return due_svc.reschedule(
+        ticket_no, body.new_due_date, body.reason, body.operator
+    )
+
+
+@router.get("/挂牌/{ticket_no}/改日流水")
+def ticket_due_versions(ticket_no: str):
+    return due_svc.list_due_versions(ticket_no)
+
+
+@router.get("/改日流水")
+def all_due_versions():
+    return due_svc.list_due_versions()
+
+
+@router.get("/超期扫描")
+def overdue_scan():
+    """超期扫描清单：只认改约后的当前取衣日，与隔离预检、总览徽章同源。"""
+    from app.db import connect
+
+    conn = connect()
+    try:
+        return due_svc.list_overdue(conn)
+    finally:
+        conn.close()

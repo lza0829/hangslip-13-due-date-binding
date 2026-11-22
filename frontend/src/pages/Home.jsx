@@ -16,6 +16,7 @@ export default function Home() {
     ? [
         ["在途水位", d.在途水位],
         ["待取", d.待取],
+        ["超期待取", d.超期待取],
         ["超期隔离", d.超期隔离],
         ["今日已取", d.已取],
         ["水洗中", d.水洗],
@@ -34,7 +35,11 @@ export default function Home() {
         </section>
         <div className="metrics">
           {cells.map(([k, v], i) => (
-            <div className="metric" key={k} style={{ animationDelay: `${i * 0.05}s` }}>
+            <div
+              className={`metric ${k === "超期待取" && v > 0 ? "danger" : ""}`}
+              key={k}
+              style={{ animationDelay: `${i * 0.05}s` }}
+            >
               <b>{v ?? "—"}</b>
               <span>{k}</span>
             </div>

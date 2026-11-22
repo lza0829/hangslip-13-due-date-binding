@@ -370,3 +370,35 @@ th {
     padding: 20px 16px 36px;
   }
 }
+
+/* 超期徽章（总览/待取/扫描共用同一危险色） */
+.metric.danger b {
+  color: var(--pin);
+}
+.badge.超期 {
+  background: var(--pin-deep);
+  color: var(--soap);
+}
+tr.overdue td {
+  background: rgba(214, 69, 61, 0.12);
+}
+
+/* 改约 */
+.reschedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.reschedule input[type="date"],
+.reschedule input[type="text"] {
+  width: 132px;
+  padding: 5px 7px;
+}
+.reschedule input.reason {
+  width: 150px;
+}
+.scan-empty {
+  color: var(--steam);
+  padding: 6px 0 12px;
+}

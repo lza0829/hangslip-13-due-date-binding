@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from fastapi import HTTPException
+
 from app.db import connect
 
 
@@ -17,6 +19,21 @@ def is_day_sealed(day: str | None = None) -> bool:
         return bool(row and row["sealed"])
     finally:
         conn.close()
+
+
+def assert_day_open(conn, day: str | None = None) -> None:
+    """写事务内的权威日闸检查。
+
+    必须在 BEGIN IMMEDIATE 取得写锁之后调用：事务外的 is_day_sealed 只是快速反馈，
+    事务内这次检查才能封死「结案与写入并发」的旁路。
+    """
+    d = day or today_str()
+    ensure_day_row(conn, d)
+    row = conn.execute(
+        "SELECT sealed FROM day_gates WHERE day=?", (d,)
+    ).fetchone()
+    if row and row["sealed"]:
+        raise HTTPException(409, "今日已结案，禁止写入")
 
 
 def ensure_day_row(conn, day: str | None = None) -> str:

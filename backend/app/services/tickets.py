@@ -5,7 +5,13 @@ from datetime import datetime
 from fastapi import HTTPException
 
 from app.db import FORWARD, connect, transaction
-from app.services.gate import ensure_day_row, is_day_sealed, refresh_in_flight, today_str
+from app.services.due import row_is_overdue
+from app.services.gate import (
+    assert_day_open,
+    is_day_sealed,
+    refresh_in_flight,
+    today_str,
+)
 
 
 def list_tickets(status: str | None = None, store_code: str | None = None) -> list[dict]:
@@ -19,8 +25,13 @@ def list_tickets(status: str | None = None, store_code: str | None = None) -> li
         if store_code:
             sql += " AND store_code=?"
             args.append(store_code)
-        sql += " ORDER BY id DESC"
+        # 待取页按取衣日（唯一权威日）升序排，最早该取的在前；其余列表按开票序倒序。
+        if status == "待取":
+            sql += " ORDER BY due_date ASC, id DESC"
+        else:
+            sql += " ORDER BY id DESC"
         rows = [dict(r) for r in conn.execute(sql, args).fetchall()]
+        today = today_str()
         for r in rows:
             r["items"] = [
                 dict(i)
@@ -29,6 +40,8 @@ def list_tickets(status: str | None = None, store_code: str | None = None) -> li
                     (r["ticket_no"],),
                 ).fetchall()
             ]
+            # 与超期扫描/隔离预检/总览徽章同源的超期标记，页面不再自行判日子。
+            r["超期"] = row_is_overdue(r, today)
         return rows
     finally:
         conn.close()
@@ -57,6 +70,14 @@ def get_ticket(ticket_no: str) -> dict:
                 (ticket_no,),
             ).fetchall()
         ]
+        data["改日流水"] = [
+            dict(v)
+            for v in conn.execute(
+                "SELECT * FROM due_date_versions WHERE ticket_no=? ORDER BY id",
+                (ticket_no,),
+            ).fetchall()
+        ]
+        data["超期"] = row_is_overdue(data)
         return data
     finally:
         conn.close()
@@ -79,7 +100,7 @@ def create_ticket(payload: dict) -> dict:
 
     now = datetime.now().replace(microsecond=0).isoformat(sep=" ")
     with transaction() as conn:
-        ensure_day_row(conn)
+        assert_day_open(conn)
         store = conn.execute(
             "SELECT * FROM stores WHERE code=? AND active=1", (store_code,)
         ).fetchone()
@@ -119,7 +140,7 @@ def advance(ticket_no: str, to_status: str, operator: str = "店员", note: str 
         raise HTTPException(409, "今日已结案，禁止改工序")
     to_status = (to_status or "").strip()
     with transaction() as conn:
-        ensure_day_row(conn)
+        assert_day_open(conn)
         row = conn.execute(
             "SELECT * FROM hang_tickets WHERE ticket_no=?", (ticket_no,)
         ).fetchone()
@@ -149,7 +170,7 @@ def pickup(ticket_no: str, pickup_code: str, operator: str = "店员") -> dict:
     if is_day_sealed():
         raise HTTPException(409, "今日已结案，禁止取衣核销")
     with transaction() as conn:
-        ensure_day_row(conn)
+        assert_day_open(conn)
         row = conn.execute(
             "SELECT * FROM hang_tickets WHERE ticket_no=?", (ticket_no,)
         ).fetchone()
@@ -190,8 +211,14 @@ def quarantine(ticket_no: str, kind: str, reason: str, operator: str = "店员")
             raise HTTPException(404, "挂牌不存在")
         if row["status"] in ("已取", "丢失隔离"):
             raise HTTPException(409, f"当前态「{row['status']}」不可隔离")
-        if kind == "超期隔离" and row["status"] not in ("待取", "超期隔离"):
-            raise HTTPException(409, "超期隔离仅从待取进入")
+        if kind == "超期隔离":
+            # 隔离预检与超期扫描、总览徽章共用同一权威谓词：只认当前 due_date。
+            if row["status"] != "待取":
+                raise HTTPException(409, "超期隔离仅从待取进入")
+            if not row_is_overdue(dict(row)):
+                raise HTTPException(
+                    409, f"未逾取衣日（{row['due_date']}），不可超期隔离"
+                )
         now = datetime.now().replace(microsecond=0).isoformat(sep=" ")
         prev = row["status"]
         conn.execute(
